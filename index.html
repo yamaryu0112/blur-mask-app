@@ -295,8 +295,8 @@ select{flex:1;height:38px;border-radius:10px;border:1px solid var(--line);backgr
   <div class="grab"></div>
   <h3>人を自動検出してぼかす</h3>
   <div id="adForm">
-    <p class="note" style="margin:0 0 10px">動画全体から人を探して追跡し、ぼかしマスクを自動で作ります。処理はすべてこの端末の中で行われます。</p>
-    <div class="lbl">ぼかす範囲</div><div class="seg" id="adRegion"></div>
+    <p class="note" style="margin:0 0 10px">動画全体から人を探して追跡し、顔を中心にしたぼかしマスクを自動で作ります。処理はすべてこの端末の中で行われます。</p>
+    <div class="lbl">ぼかしの大きさ（顔を中心に）</div><div class="seg" id="adRegion"></div>
     <div class="lbl">精度</div><div class="seg" id="adQuality"></div>
     <div class="lbl">解析の細かさ（1秒あたりの検出回数）</div><div class="seg" id="adRate"></div>
     <div class="row"><label for="adThr">検出のしきい値</label><input type="range" id="adThr" min="20" max="70"><span class="val" id="adThrV"></span></div>
@@ -943,7 +943,7 @@ class BlurRenderer {
     this._chain = [{ tex: src, w: W, h: H }];
     let base = src;
     list.forEach((g, gi) => {
-      const sigma = Math.max(0.6, g.blur / 100 * 0.08 * Math.min(W, H));
+      const sigma = Math.max(0.6, g.blur / 100 * 0.04 * Math.min(W, H));
       const blurTex = this._blur(sigma);
       const last = gi === list.length - 1;
       const out = last ? null : this._target(gi % 2 ? 'pB' : 'pA', W, H);
@@ -2312,25 +2312,45 @@ const MODEL_SRC = {
   std: { size: 640, urls: ['models/efficientdet_lite0.tflite', GCS + 'efficientdet_lite0/float16/1/efficientdet_lite0.tflite', GCS + 'efficientdet_lite0/float16/latest/efficientdet_lite0.tflite', GCS + 'efficientdet_lite0/int8/1/efficientdet_lite0.tflite'] },
   high: { size: 960, urls: ['models/efficientdet_lite2.tflite', GCS + 'efficientdet_lite2/float16/1/efficientdet_lite2.tflite', GCS + 'efficientdet_lite2/float16/latest/efficientdet_lite2.tflite', GCS + 'efficientdet_lite2/int8/1/efficientdet_lite2.tflite'] },
 };
-const AD = { vision: null, fileset: null, det: null, detKey: '', delegate: '', tracks: [], opts: { region: 'upper', quality: 'std', rate: 10, thr: 40, replace: true }, abort: null };
+const FACE_URLS = ['models/blaze_face_short_range.tflite', 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite', 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite'];
+const AD = { vision: null, fileset: null, det: null, detKey: '', delegate: '', face: null, faceTried: false, tracks: [], opts: { size: 'm', quality: 'std', rate: 10, thr: 40, replace: true }, abort: null };
+const SIZE_K = { s: 1.25, m: 1.6, l: 2.1 };
 
-async function getModelBytes(q, status) {
+async function getModelBytes(q, status) { return fetchModel(MODEL_SRC[q].urls, status); }
+async function fetchModel(urls, status) {
   let cache = null;
   try { cache = await caches.open('blurmask-models'); } catch (e) { }
-  for (const u of MODEL_SRC[q].urls) {
+  for (const u of urls) {
     const url = new URL(u, location.href).href;
     try {
       if (cache) { const hit = await cache.match(url); if (hit) return new Uint8Array(await hit.arrayBuffer()); }
-      if (!url.startsWith(location.origin)) status('検出モデルをダウンロード中…（初回のみ・数MB）');
+      if (!url.startsWith(location.origin)) status('検出モデルをダウンロード中…（初回のみ）');
       const r = await fetch(url);
       if (!r.ok) continue;
       const buf = await r.arrayBuffer();
-      if (buf.byteLength < 100000) continue;
+      if (buf.byteLength < 50000) continue;
       try { await cache?.put(url, new Response(buf.slice(0), { headers: { 'Content-Type': 'application/octet-stream' } })); } catch (e) { }
       return new Uint8Array(buf);
     } catch (e) { /* 次の候補へ */ }
   }
   throw new Error('検出モデルを取得できませんでした。初回だけはインターネットに接続した状態でお試しください。');
+}
+// 顔検出（人物枠の上部を切り出して探す）。使えなければ null（体の枠から頭の位置を推定）
+async function getFaceDetector(status) {
+  if (AD.face) return AD.face;
+  if (AD.faceTried) return null;
+  AD.faceTried = true;
+  try {
+    const bytes = await fetchModel(FACE_URLS, status);
+    for (const delegate of (AD.forceCPU ? ['CPU'] : ['GPU', 'CPU'])) {
+      try {
+        const fd = await AD.vision.FaceDetector.createFromOptions(AD.fileset, { baseOptions: { modelAssetBuffer: bytes, delegate }, runningMode: 'IMAGE', minDetectionConfidence: 0.5 });
+        const c = document.createElement('canvas'); c.width = c.height = 64; fd.detect(c);
+        AD.face = fd; return fd;
+      } catch (e) { }
+    }
+  } catch (e) { }
+  return null;
 }
 async function getDetector(q, thr, status, cpuOnly) {
   const key = q + ':' + thr + (cpuOnly ? ':cpu' : '');
@@ -2458,10 +2478,36 @@ function cropThumb(can, b) {
 async function analyzePeople({ quality, rate, thr, signal, onProgress }) {
   const v = S.media.video, file = S.file;
   let det = await getDetector(quality, thr, s => onProgress({ status: s }));
+  const face = await getFaceDetector(s => onProgress({ status: s }));
   const big = MODEL_SRC[quality].size, sc = Math.min(1, big / Math.max(S.W, S.H));
   const cw = Math.max(2, Math.round(S.W * sc)), ch = Math.max(2, Math.round(S.H * sc));
   const can = document.createElement('canvas'); can.width = cw; can.height = ch;
   const ctx = can.getContext('2d');
+  // 顔探し用の中解像度キャンバスと切り出し用キャンバス
+  const ms = Math.min(1, 1440 / Math.max(S.W, S.H));
+  const mw = Math.round(S.W * ms), mh = Math.round(S.H * ms);
+  const mid = document.createElement('canvas'); mid.width = mw; mid.height = mh;
+  const mctx = mid.getContext('2d');
+  const FC = 192, fcan = document.createElement('canvas'); fcan.width = fcan.height = FC;
+  const fctx = fcan.getContext('2d');
+  const findFace = b => {
+    const bx = b.x * mw, by = b.y * mh, bw = b.w * mw, bh = b.h * mh;
+    const s = Math.max(bw * (bh / bw > 1.3 ? 1.25 : 1.05), 8);
+    if (s < 26) return null;
+    const sx = bx + bw / 2 - s / 2, sy = by - s * 0.08;
+    fctx.fillStyle = '#000'; fctx.fillRect(0, 0, FC, FC);
+    fctx.drawImage(mid, sx, sy, s, s, 0, 0, FC, FC);
+    let best = null;
+    for (const d of (face.detect(fcan).detections || [])) {
+      const bb = d.boundingBox, sc2 = d.categories?.[0]?.score ?? 0;
+      const cy = bb.originY + bb.height / 2;
+      if (cy > FC * 0.8) continue;
+      if (!best || sc2 > best.s) best = { s: sc2, bb };
+    }
+    if (!best) return null;
+    const k = s / FC, bb = best.bb;
+    return { cx: (sx + (bb.originX + bb.width / 2) * k) / mw, cy: (sy + (bb.originY + bb.height / 2) * k) / mh, w: bb.width * k / mw, h: bb.height * k / mh };
+  };
   // 試運転：GPU で動かない端末なら CPU に切り替える
   ctx.fillStyle = '#777'; ctx.fillRect(0, 0, cw, ch);
   try { det.detect(can); }
@@ -2481,7 +2527,8 @@ async function analyzePeople({ quality, rate, thr, signal, onProgress }) {
         const t = f.timestamp / 1e6;
         if (t < -1e-3 || t + 1e-4 < nextT) return;
         nextT = t + interval * 0.999;
-        drawRot(ctx, f, v.rotation, cw, ch);
+        if (face) { drawRot(mctx, f, v.rotation, mw, mh); ctx.drawImage(mid, 0, 0, cw, ch); }
+        else drawRot(ctx, f, v.rotation, cw, ch);
         f.close(); f = null;
         const res = det.detect(can);
         const boxes = [];
@@ -2503,6 +2550,7 @@ async function analyzePeople({ quality, rate, thr, signal, onProgress }) {
           });
           if (!dup) kept.push(b);
         }
+        if (face) for (const b of kept) { try { b.face = findFace(b); } catch (e) { b.face = null; } }
         tracker.update(t, kept, can);
       } catch (e) { err = e; }
       finally { if (f) f.close(); }
@@ -2528,18 +2576,63 @@ async function analyzePeople({ quality, rate, thr, signal, onProgress }) {
   return tracker.finish(S.duration);
 }
 
-// 検出枠 → マスクの範囲（頭〜上半身 or 全身）
-function regionOf(p, region) {
-  const x = p.x * S.W, y = p.y * S.H, w = p.w * S.W, h = p.h * S.H;
-  let rh = h;
-  if (region === 'upper') { const ar = h / Math.max(1, w); rh = ar > 1.8 ? h * 0.52 : ar > 1.25 ? h * 0.68 : h; }
-  return { t: p.t, cx: (x + w / 2) / S.W, cy: (y + rh / 2) / S.H, hw: (w / 2) * 1.12 / S.W, hh: (rh / 2) * 1.12 / S.H };
+// 検出結果 → 頭（顔）の位置と大きさ（px）。画面端で切れた体の枠は、見えていた時の大きさから外側へ補う
+function headPath(tr) {
+  const W = S.W, H = S.H, E = 0.004;
+  const pts = tr.pts.map(p => ({ ...p, L: p.x < E, R: p.x + p.w > 1 - E, T: p.y < E, B: p.y + p.h > 1 - E }));
+  const med = arr => { if (!arr.length) return 0; const a = arr.slice().sort((x, y) => x - y); return a[a.length >> 1]; };
+  // 近い時間の「切れていない」枠の大きさを使う
+  const fullAt = (i, key, cut) => {
+    const near = [];
+    for (let d = 0; d < pts.length && near.length < 5; d++) {
+      for (const j of [i - d, i + d]) if (j >= 0 && j < pts.length && (d || j === i) && !cut(pts[j])) near.push(pts[j][key]);
+    }
+    return near.length ? med(near) : Math.max(...pts.map(p => p[key]));
+  };
+  const out = pts.map((p, i) => {
+    let x = p.x, w = p.w, y = p.y, h = p.h;
+    if (p.L !== p.R) { const fw = fullAt(i, 'w', q => q.L || q.R); if (fw > w) { if (p.L) x = p.x + p.w - fw; w = fw; } }
+    if (p.T && !p.B) { const fh = fullAt(i, 'h', q => q.T || q.B); if (fh > h) { y = p.y + p.h - fh; h = fh; } }
+    return { t: p.t, X: x * W, Y: y * H, BW: w * W, BH: h * H, face: p.face, cut: p.L || p.R || p.T };
+  });
+  // 顔が見えた点から「枠に対する頭の位置・大きさ」を学習
+  const learned = out.map(o => {
+    if (!o.face) return null;
+    const fw = o.face.w * W, fh = o.face.h * H;
+    const hx = o.face.cx * W, hy = o.face.cy * H - fh * 0.12, hw = fw * 1.35, hh = fh * 1.6;
+    return { ox: (hx - (o.X + o.BW / 2)) / o.BW, oy: (hy - o.Y) / o.BW, sw: hw / o.BW, sh: hh / o.BW, hx, hy, hw, hh };
+  });
+  return out.map((o, i) => {
+    let hx, hy, hw, hh;
+    if (learned[i] && !o.cut) ({ hx, hy, hw, hh } = learned[i]);
+    else {
+      // 近くの顔の観測（3秒以内）から相対位置を借りる
+      let L = null, dist = 1e9;
+      for (let j = 0; j < out.length; j++) if (learned[j]) { const d = Math.abs(out[j].t - o.t); if (d < dist) { dist = d; L = learned[j]; } }
+      if (L && dist < 3) {
+        if (learned[i]) { ({ hx, hy, hw, hh } = learned[i]); }
+        else { hw = L.sw * o.BW; hh = L.sh * o.BW; hx = o.X + o.BW / 2 + L.ox * o.BW; hy = o.Y + L.oy * o.BW; }
+      } else {
+        // 体の枠から推定（全身なら頭は身長の約1/7.5、上半身なら肩幅の約0.38）
+        const ar = o.BH / Math.max(1, o.BW);
+        if (ar > 1.8) { hh = o.BH / 7.2; hw = hh * 0.8; } else { hw = o.BW * 0.38; hh = hw * 1.28; }
+        hx = o.X + o.BW / 2; hy = o.Y + hh * 0.55;
+      }
+    }
+    const vis = hx + hw / 2 > 0 && hx - hw / 2 < W && hy + hh / 2 > 0 && hy - hh / 2 < H;
+    return { t: o.t, hx, hy, hw, hh, vis };
+  });
 }
-function smoothPts(pts) {
+function smoothHead(pts) {
   return pts.map((p, i) => {
-    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
-    const r = { ...p };
-    for (const k of ['cx', 'cy', 'hw', 'hh']) r[k] = (a[k] + 2 * p[k] + b[k]) / 4;
+    const r = { ...p }; let ws = 0;
+    for (const k of ['hx', 'hy', 'hw', 'hh']) r[k] = 0;
+    for (let d = -2; d <= 2; d++) {
+      const q = pts[i + d]; if (!q || Math.abs(q.t - p.t) > 0.5) continue;
+      const w = 3 - Math.abs(d); ws += w;
+      for (const k of ['hx', 'hy', 'hw', 'hh']) r[k] += q[k] * w;
+    }
+    for (const k of ['hx', 'hy', 'hw', 'hh']) r[k] /= ws;
     return r;
   });
 }
@@ -2560,18 +2653,51 @@ function simplifyKeys(pts, tol) {
   }
   return pts.filter((_, i) => keep[i]);
 }
-function tracksToMasks(tracks, region) {
+function tracksToMasks(tracks, size) {
+  const K = SIZE_K[size] || 1.6;
   let n = S.masks.filter(m => m.auto).length;
   const made = [];
   for (const tr of tracks) {
-    const raw = smoothPts(tr.pts.map(p => regionOf(p, region)));
-    const keys = simplifyKeys(raw, 0.006).map(k => ({ t: k.t, cx: k.cx, cy: k.cy, hw: k.hw, hh: k.hh, rot: 0 }));
+    const hp = smoothHead(headPath(tr));
+    // 顔が画面内にある区間ごとに分ける（画面外の間はマスク不要）
+    const segs = []; let cur = null;
+    hp.forEach((p, i) => {
+      if (p.vis) {
+        if (!cur || p.t - cur[cur.length - 1].t > 0.6) { cur = []; segs.push(cur); if (i > 0 && !hp[i - 1].vis) cur.push(hp[i - 1]); }
+        cur.push(p);
+      } else if (cur && cur.length && cur[cur.length - 1].vis) { cur.push(p); cur = null; }
+    });
     n++;
-    const m = {
-      id: S.nextId++, name: '人物' + n, op: 'add', auto: true, type: 'ellipse', blur: 80, feather: 35, invert: false, visible: true,
-      animated: keys.length > 1, start: Math.max(0, tr.start - 0.15), end: Math.min(S.duration, tr.end + 0.35), keys,
+    // 検出が途切れた端は、直前の動きのまま少し先まで延ばす（画面外へ抜ける動きを途中で止めない）
+    const extend = (seg, atEnd) => {
+      const e = atEnd ? seg[seg.length - 1] : seg[0];
+      const near = seg.filter(p => Math.abs(p.t - e.t) <= 0.5 && p !== e);
+      if (!near.length) return;
+      const o = near.reduce((a, b) => (Math.abs(b.t - e.t) > Math.abs(a.t - e.t) ? b : a));
+      const dt = e.t - o.t; if (!dt) return;
+      const vx = (e.hx - o.hx) / dt, vy = (e.hy - o.hy) / dt;
+      const d = atEnd ? 0.4 : -0.2;
+      const t = clamp(e.t + d, 0, S.duration);
+      const p = { ...e, t, hx: e.hx + vx * (t - e.t), hy: e.hy + vy * (t - e.t) };
+      p.vis = p.hx + p.hw / 2 > 0 && p.hx - p.hw / 2 < S.W && p.hy + p.hh / 2 > 0 && p.hy - p.hh / 2 < S.H;
+      if (atEnd) seg.push(p); else seg.unshift(p);
     };
-    S.masks.push(m); made.push(m);
+    segs.forEach(seg => { if (seg[seg.length - 1].vis) extend(seg, true); if (seg[0].vis) extend(seg, false); });
+    segs.forEach((seg, si) => {
+      const vis = seg.filter(p => p.vis);
+      if (!vis.length) return;
+      const keys = simplifyKeys(seg.map(p => ({ t: p.t, cx: p.hx / S.W, cy: p.hy / S.H, hw: p.hw / 2 * K / S.W, hh: p.hh / 2 * K / S.H })), 0.005)
+        .map(k => ({ t: k.t, cx: k.cx, cy: k.cy, hw: k.hw, hh: k.hh, rot: 0 }));
+      const leftEarly = !seg[0].vis, leftLate = !seg[seg.length - 1].vis;
+      const m = {
+        id: S.nextId++, name: '人物' + n + (segs.length > 1 ? '-' + (si + 1) : ''), op: 'add', auto: true, type: 'ellipse', blur: 80, feather: 35, invert: false, visible: true,
+        animated: keys.length > 1,
+        start: Math.max(0, seg[0].t - (leftEarly ? 0 : 0.05)),
+        end: Math.min(S.duration, seg[seg.length - 1].t + (leftLate ? 0 : 0.05)),
+        keys,
+      };
+      S.masks.push(m); made.push(m);
+    });
   }
   return made;
 }
@@ -2589,7 +2715,7 @@ function adSeg(id, key, list) {
 function openAuto() {
   if (!S.media) return;
   pause();
-  adSeg('#adRegion', 'region', [['upper', '頭〜上半身'], ['full', '全身']]);
+  adSeg('#adRegion', 'size', [['s', '小さめ'], ['m', '標準'], ['l', '大きめ']]);
   adSeg('#adQuality', 'quality', [['std', '標準（速い）'], ['high', '高精度（遠くの人も）']]);
   adSeg('#adRate', 'rate', [[5, '粗め'], [10, '標準'], [15, '細かめ']]);
   $('#adThr').value = AD.opts.thr; $('#adThrV').textContent = AD.opts.thr;
@@ -2642,7 +2768,7 @@ $('#adStart').onclick = async () => {
     tracks.forEach(tr => { tr.blur = true; tr.subject = false; });
     const top = tracks.reduce((a, b) => (!a || b.weight > a.weight ? b : a), null);
     if (top) { top.blur = false; top.subject = true; }
-    AD.tracks = tracks; AD.forFile = S.file; AD.region = AD.opts.region;
+    AD.tracks = tracks; AD.forFile = S.file;
     S.exporting = false;
     showAdStage('result');
   } catch (e) {
@@ -2692,10 +2818,10 @@ $('#adMake').onclick = () => {
     const ids = new Set(S.masks.filter(m => m.auto).map(m => m.id));
     S.masks = S.masks.filter(m => !ids.has(m.id) && !(isSub(m) && ids.has(m.target)));
   }
-  const made = tracksToMasks(list, AD.region || AD.opts.region);
+  const made = tracksToMasks(list, AD.opts.size);
   S.sel = made[0]?.id ?? S.sel;
   commit(); closeSheets(); refreshAll();
-  toast(`${made.length} 人分のマスクを作成しました。再生して確認し、ずれた所はキーフレームで直してください`, 5000);
+  toast(`${list.length} 人分のマスクを作成しました。再生して確認し、ずれた所はキーフレームで直してください`, 5000);
 };
 
 // ---------- 初期化 ----------
