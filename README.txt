@@ -1,16 +1,24 @@
-ぼかしマスク（PWA 版）の公開手順 — GitHub Pages の場合
+ぼかしマスク（PWA 版）
 
-1. github.com で新しいリポジトリを作る（Public、名前は何でも可。例: blur-mask）
-2. 「Add file」→「Upload files」で、この zip の中身（index.html / manifest.webmanifest /
-   sw.js / icons フォルダ）をすべてドラッグして Commit する
-   ※ zip ごとではなく、展開した中身をアップロードしてください
-3. Settings → Pages → Branch を「main」「/(root)」にして Save
-4. 1〜2分後に https://<ユーザー名>.github.io/blur-mask/ で開ける
-5. Android の Chrome でそのURLを開き、メニュー「⋮」→「アプリをインストール」
+■ 今回の更新（人の自動検出を追加）で差し替える／追加するファイル
+  - index.html …… 差し替え
+  - sw.js ……… 差し替え（キャッシュ番号を v2 に上げてあります）
+  - mediapipe フォルダ …… 新規追加（人物検出エンジン、約10MB）
+  icons / manifest.webmanifest は変更なし
+  GitHub Desktop でリポジトリのフォルダにコピーして Commit → Push すれば反映されます。
 
-一度インストールして起動すれば、以降は機内モードでも使えます。
+■ 自動検出について
+  - 初めて「人を自動検出」を使うときだけ、インターネット接続が必要です。
+    検出モデル（Google の EfficientDet-Lite、数MB）を自動でダウンロードして端末に保存します。
+    「高精度」を初めて選んだときも、別のモデルを1回だけダウンロードします。
+  - 一度使えば、以降はオフラインでも動きます。
+  - 料金はかかりません（MediaPipe・モデルとも Apache 2.0 ライセンス、処理はすべて端末内）。
 
-アプリを更新したとき：index.html を差し替え、sw.js の CACHE = 'blurmask-v1' を
-'blurmask-v2' のように番号を上げてください（端末側のキャッシュが入れ替わります）。
+■ 新しく公開するとき（GitHub Pages）
+  1. リポジトリにこのフォルダの中身をすべて置く
+  2. Settings（リポジトリの設定）→ Pages → Branch を main / (root) にして Save
+  3. https://<ユーザー名>.github.io/<リポジトリ名>/ を Android の Chrome で開き、
+     「⋮」→「アプリをインストール」
 
-Cloudflare Pages / Netlify の場合は、このフォルダをそのままドラッグ＆ドロップで公開できます。
+■ 次回以降アプリを更新するとき
+  index.html を差し替え、sw.js の CACHE = 'blurmask-v2' の番号を上げてください。
