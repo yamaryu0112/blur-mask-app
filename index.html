@@ -70,6 +70,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 #empty h2{font-size:20px;margin:0 0 6px}
 #empty p{margin:0 0 18px;color:#B9AEA3;font-size:14px}
 #hint{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:rgba(20,16,13,.82);color:#F5EDE3;padding:7px 14px;border-radius:18px;font-size:13px;pointer-events:none;display:none;white-space:nowrap}
+#uiBtn{position:absolute;right:10px;top:10px;display:none;align-items:center;gap:6px;height:34px;padding:0 12px 0 10px;border-radius:17px;border:1px solid rgba(255,255,255,.25);background:rgba(18,14,12,.72);color:#F3EBE1;font-size:12px;cursor:pointer;z-index:2}
+#uiBtn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.5}
+#uiBtn.dim{color:#A99E93}
 #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;z-index:50;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
 #toast.show{opacity:1}
 
@@ -158,7 +161,7 @@ select{flex:1;height:38px;border-radius:10px;border:1px solid var(--line);backgr
 #autoSheet .seg{margin-bottom:4px}
 .chip.auto{display:flex;gap:6px;border-style:solid;border-color:var(--accent)}
 .chip.auto svg{stroke:var(--accent)}
-.plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:6px}
+.plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-bottom:6px}
 .pcard{display:flex;align-items:center;gap:8px;padding:6px;border-radius:12px;border:1.5px solid var(--line);background:var(--raise);cursor:pointer;min-height:84px;position:relative}
 .pcard.on{border-color:var(--accent);background:var(--accent-soft)}
 .pcard .pimg{height:72px;width:auto;max-width:64px;object-fit:cover;border-radius:8px;flex:0 0 auto}
@@ -166,6 +169,13 @@ select{flex:1;height:38px;border-radius:10px;border:1px solid var(--line);backgr
 .pmeta{display:flex;flex-direction:column;min-width:0;flex:1}
 .pmeta b{font-size:13px}
 .pmeta small{font-size:11px;color:var(--muted)}
+.pcard{flex-wrap:wrap}
+.pcard.mixed{border-color:var(--accent);border-style:dashed}
+.pscenes{display:flex;gap:6px;overflow-x:auto;width:100%;padding:2px 0 30px;scrollbar-width:none}
+.pscene{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px;border:1.5px solid var(--line);background:var(--panel);border-radius:8px;padding:3px;cursor:pointer;font-size:10px;color:var(--muted)}
+.pscene img{height:40px;width:auto;max-width:34px;object-fit:cover;border-radius:5px}
+.pscene.on{border-color:var(--accent)}
+.pscene.on img{filter:blur(2px)}
 .pgo{position:absolute;right:6px;bottom:6px;height:26px;padding:0 9px;border-radius:13px;border:1px solid var(--line);background:var(--panel);font-size:12px;cursor:pointer}
 .prog{height:10px;border-radius:5px;background:var(--raise);border:1px solid var(--line);overflow:hidden;margin:10px 0 6px}
 .prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
@@ -200,6 +210,7 @@ select{flex:1;height:38px;border-radius:10px;border:1px solid var(--line);backgr
         <button class="btn primary" id="openBtn2">動画を選ぶ</button>
       </div></div>
       <div id="hint"></div>
+      <button id="uiBtn" aria-label="マスク枠の表示を切り替え"><svg viewBox="0 0 18 18"><rect x="2" y="3" width="14" height="12" rx="2" stroke-dasharray="3 2"/><circle cx="9" cy="9" r="2.4"/></svg><span>枠：すべて</span></button>
     </div>
     <div id="dock">
       <div class="dock-top">
@@ -315,6 +326,7 @@ select{flex:1;height:38px;border-radius:10px;border:1px solid var(--line);backgr
   </div>
   <div id="adResult" style="display:none">
     <p class="note" id="adSummary" style="margin:0 0 10px"></p>
+    <label class="row" style="gap:10px;min-height:36px"><input type="checkbox" id="adLink" style="width:18px;height:18px;accent-color:var(--accent)"> 別の場面に映った同じ人を1つのマスクにまとめる</label>
     <div class="plist" id="adList"></div>
     <label class="row" id="adReplaceRow" style="gap:10px"><input type="checkbox" id="adReplace" style="width:18px;height:18px;accent-color:var(--accent)"> 前回の自動マスクを置き換える</label>
     <div class="actions" style="justify-content:flex-end"><button class="btn" id="adBack">やり直す</button><button class="btn primary" id="adMake"></button></div>
@@ -1004,7 +1016,7 @@ const EYE_OFF = '<svg viewBox="0 0 18 18"><path d="M1.5 9S4.5 3.5 9 3.5 16.5 9 1
 const S = {
   file: null, media: null, W: 0, H: 0, duration: 0, fps: 30,
   t: 0, playing: false, mode: null, // 'video' | 'decoder'
-  masks: [], sel: null, nextId: 1, overlay: false, adding: null, addingOp: 'add', addingTarget: 'all',
+  masks: [], sel: null, nextId: 1, overlay: false, uiMode: 'all', adding: null, addingOp: 'add', addingTarget: 'all',
   undo: [], redo: [], committed: '[]', exporting: false,
 };
 
@@ -1028,6 +1040,17 @@ function toast(msg, ms = 2600) {
 
 // ---------- マスク計算 ----------
 const selMask = () => S.masks.find(m => m.id === S.sel) || null;
+// マスク枠の表示：all（すべて）/ sel（選択中のみ）/ none（非表示）
+const uiShows = m => S.uiMode === 'all' || (S.uiMode === 'sel' && m.id === S.sel);
+const UI_LABEL = { all: '枠：すべて', sel: '枠：選択中', none: '枠：非表示' };
+function setUiMode(mode) {
+  S.uiMode = mode;
+  const b = $('#uiBtn'); b.querySelector('span').textContent = UI_LABEL[mode];
+  b.classList.toggle('dim', mode === 'none');
+  try { localStorage.setItem('blurmask:uiMode', mode); } catch (e) { }
+  scheduleDraw();
+}
+$('#uiBtn').onclick = () => setUiMode({ all: 'sel', sel: 'none', none: 'all' }[S.uiMode]);
 function interp(m, t) {
   const k = m.keys;
   if (!m.animated || k.length === 1 || t <= k[0].t) return { ...k[0] };
@@ -1035,6 +1058,9 @@ function interp(m, t) {
   if (t >= L.t) return { ...L };
   let i = 0; while (k[i + 1].t < t) i++;
   const a = k[i], b = k[i + 1], f = (t - a.t) / (b.t - a.t || 1);
+  // off: このキーから次のキーまで非表示 / jump: 前のキーから補間せずに切り替える
+  if (a.off) return { ...a, t };
+  if (b.jump) return { ...a, t, off: false };
   const r = { t };
   for (const p of ['cx', 'cy', 'hw', 'hh', 'rot']) r[p] = a[p] + (b[p] - a[p]) * f;
   return r;
@@ -1042,7 +1068,7 @@ function interp(m, t) {
 const inSpan = (m, t) => t >= m.start - 1e-4 && t <= m.end + 1e-4;
 function evalMask(m, t) {
   const g = interp(m, t);
-  return { ...g, type: m.type, typeId: TYPE_ID[m.type], blur: m.blur, feather: m.feather, invert: m.invert, id: m.id };
+  return { ...g, off: !!g.off, type: m.type, typeId: TYPE_ID[m.type], blur: m.blur, feather: m.feather, invert: m.invert, id: m.id };
 }
 const isSub = m => m.op === 'sub';
 // 加算マスクの直後に、そのマスクを削る除算マスクを並べる
@@ -1057,14 +1083,15 @@ function orderedMasks() {
 }
 // 時刻 t で効いているマスク。adds[i].subBits は subs のどれで削るかのビット列
 function activeSet(list, t) {
-  const subM = list.filter(m => m.visible && isSub(m) && inSpan(m, t)).slice(0, 16);
-  const subs = subM.map(m => evalMask(m, t));
+  const pairs = list.filter(m => m.visible && isSub(m) && inSpan(m, t)).map(m => [m, evalMask(m, t)]).filter(p => !p[1].off).slice(0, 16);
+  const subM = pairs.map(p => p[0]), subs = pairs.map(p => p[1]);
   const addM = list.filter(m => m.visible && !isSub(m) && inSpan(m, t));
   const adds = addM.map(m => {
-    const e = evalMask(m, t); let bits = 0;
+    const e = evalMask(m, t); if (e.off) return null;
+    let bits = 0;
     subM.forEach((s, j) => { if (s.target === 'all' || s.target === m.id) bits |= 1 << j; });
     e.subBits = bits; return e;
-  });
+  }).filter(Boolean);
   return { adds, subs };
 }
 function frameTol() { return 0.5 / S.fps; }
@@ -1145,6 +1172,7 @@ async function openFile(file) {
   const restored = loadProject();
   S.committed = snap(); S.sel = S.masks[0]?.id ?? null; updUndo();
   $('#empty').style.display = 'none';
+  $('#uiBtn').style.display = 'flex';
   $('#exportBtn').disabled = false;
   $('#meta').textContent = `${S.W}×${S.H}  ${Math.round(S.fps * 100) / 100}fps  ${fmt(S.duration).replace(/\.\d+$/, '')}`;
   $('#tDur').textContent = fmt(S.duration);
@@ -1371,11 +1399,11 @@ function drawUI() {
   ctx.save();
   const diag = Math.hypot(uiC.width, uiC.height) / dpr;
   for (const m of orderedMasks()) {
-    if (!m.visible || m.type === 'full') continue;
+    if (!m.visible || m.type === 'full' || !uiShows(m)) continue;
     const sel = m.id === S.sel;
-    const active = inSpan(m, S.t);
-    if (!sel && !active) continue;
     const ev = interp(m, S.t), g = geo(ev);
+    const active = inSpan(m, S.t) && !ev.off;
+    if (!sel && !active) continue;
     const sub = isSub(m);
     const col = sel ? (sub ? SUBC : ACCENT) : (sub ? 'rgba(140,190,255,.85)' : 'rgba(255,255,255,.75)');
     ctx.lineWidth = sel ? 2 : 1.2;
@@ -1429,8 +1457,10 @@ function drawUI() {
   const sw = uiC.width / dpr, sh = uiC.height / dpr;
   S.arrows = [];
   for (const m of orderedMasks()) {
-    if (!m.visible || m.type === 'full' || (!inSpan(m, S.t) && m.id !== S.sel)) continue;
-    const g = geo(interp(m, S.t)), p = toScreen(g.cx, g.cy);
+    if (!m.visible || m.type === 'full' || !uiShows(m)) continue;
+    const ev = interp(m, S.t);
+    if ((!inSpan(m, S.t) || ev.off) && m.id !== S.sel) continue;
+    const g = geo(ev), p = toScreen(g.cx, g.cy);
     if (p.x >= 0 && p.x <= sw && p.y >= 0 && p.y <= sh) continue;
     const ax = clamp(p.x, 20, sw - 20), ay = clamp(p.y, 20, sh - 20), ang = Math.atan2(p.y - ay, p.x - ax);
     const c = m.id === S.sel ? (isSub(m) ? SUBC : ACCENT) : 'rgba(255,255,255,.85)';
@@ -1459,7 +1489,7 @@ let drag = null;
 function stagePt(e) { const r = stage.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
 
 stage.addEventListener('pointerdown', e => {
-  if (!S.media || S.exporting || e.target.closest('#empty')) return;
+  if (!S.media || S.exporting || e.target.closest('#empty') || e.target.closest('#uiBtn')) return;
   stage.setPointerCapture(e.pointerId);
   const p = stagePt(e); ptrs.set(e.pointerId, p);
   if (S.playing) pause();
@@ -1467,6 +1497,7 @@ stage.addEventListener('pointerdown', e => {
   if (ptrs.size > 2) return;
   const f = toFrame(p.x, p.y);
   if (S.adding) { drag = { op: 'draw', f0: f, p0: p, before: snap(), moved: false }; return; }
+  if (S.uiMode === 'none') { drag = null; toast('マスク枠を非表示にしています。右上のボタンで表示できます'); return; }
   for (const a of (S.arrows || [])) {
     if (Math.hypot(a.x - p.x, a.y - p.y) < 22) {
       const am = S.masks.find(x => x.id === a.id);
@@ -1486,6 +1517,7 @@ stage.addEventListener('pointerdown', e => {
   const om = orderedMasks();
   for (let i = om.length - 1; i >= 0; i--) {
     const o = om[i];
+    if (!uiShows(o) || interp(o, S.t).off) continue;
     if (o === m || !o.visible || !inSpan(o, S.t)) continue;
     const ev = interp(o, S.t);
     if (hitBody(o, ev, f.x, f.y)) { select(o.id); drag = { op: 'move', m: o, ev0: ev, f0: f, before: snap(), moved: false }; return; }
@@ -1567,7 +1599,7 @@ function newMask(type, f, op = 'add', target = 'all') {
   const parent = sub ? S.masks.find(x => x.id === target) : null;
   const m = {
     id: S.nextId, name: (sub ? '削り' : 'マスク') + S.nextId, op, target: sub ? target : undefined,
-    type, blur: 70, feather: type === 'rect' ? 25 : 40, invert: false, visible: true,
+    type, blur: 25, feather: type === 'rect' ? 25 : 40, invert: false, visible: true,
     animated: false, start: parent ? parent.start : 0, end: parent ? parent.end : S.duration,
     keys: [{ t: S.t, cx: f.x / S.W, cy: f.y / S.H, hw: 0.01, hh: 0.01, rot: 0 }],
   };
@@ -1647,7 +1679,7 @@ function updTime() {
 $('#keyBtn').onclick = () => {
   const m = selMask(); if (!m || m.type === 'full') return;
   pause();
-  if (!m.animated) { const g = interp(m, S.t); m.animated = true; m.keys = [{ ...g, t: S.t }]; toast('動きを記録します。マスクを動かすと、その時点にキーフレームが追加されます'); }
+  if (!m.animated) { const g = interp(m, S.t); m.animated = true; m.keys = [{ t: S.t, cx: g.cx, cy: g.cy, hw: g.hw, hh: g.hh, rot: g.rot }]; toast('動きを記録します。マスクを動かすと、その時点にキーフレームが追加されます'); }
   else {
     const k = keyAt(m, S.t);
     if (k) {
@@ -1750,7 +1782,7 @@ live('#featherR', 'feather', '#featherV');
 $('#invChk').onchange = e => { const m = selMask(); if (!m) return; m.invert = e.target.checked; commit(); refreshAll(); };
 $('#animChk').onchange = e => {
   const m = selMask(); if (!m) return;
-  if (e.target.checked) { const g = interp(m, S.t); m.animated = true; m.keys = [{ ...g, t: S.t }]; }
+  if (e.target.checked) { const g = interp(m, S.t); m.animated = true; m.keys = [{ t: S.t, cx: g.cx, cy: g.cy, hw: g.hw, hh: g.hh, rot: g.rot }]; }
   else { const g = interp(m, S.t); m.animated = false; m.keys = [{ ...g, t: 0 }]; }
   commit(); refreshAll();
 };
@@ -1786,7 +1818,9 @@ $('#addCancel').onclick = closeSheets;
 document.querySelectorAll('#addSheet .shape').forEach(b => b.onclick = () => {
   const t = b.dataset.t; closeSheets();
   if (t === 'full') { const m = newMask('full', { x: S.W / 2, y: S.H / 2 }, S.addingOp, S.addingTarget); m.keys[0].hw = .5; m.keys[0].hh = .5; commit(); refreshAll(); return; }
-  S.adding = t; S.sel = null; refreshAll();
+  S.adding = t; S.sel = null;
+  if (S.uiMode === 'none') setUiMode('sel');
+  refreshAll();
 });
 
 // ---------- 書き出し ----------
@@ -2112,16 +2146,29 @@ function drawTL() {
     TL.hits.push({ m, y, bx0, bx1 });
     if (vx1 <= vx0) continue;
     c.globalAlpha = m.visible ? 1 : 0.4;
-    rr(c, vx0, y + 3, vx1 - vx0, TL.rowH - 6, 6);
-    if (sub) { c.fillStyle = sel ? COL.sub : COL.raise; c.fill(); c.strokeStyle = COL.sub; c.lineWidth = 1.2; c.setLineDash(sel ? [] : [4, 3]); c.stroke(); c.setLineDash([]); }
-    else { c.fillStyle = sel ? COL.accent : COL.soft; c.fill(); }
+    const ivs = visIntervals(m);
+    if (ivs.length > 1) { c.strokeStyle = sub ? COL.sub : COL.accent; c.lineWidth = 1; c.setLineDash([2, 3]); c.beginPath(); c.moveTo(vx0, y + TL.rowH / 2); c.lineTo(vx1, y + TL.rowH / 2); c.stroke(); c.setLineDash([]); }
+    c.save(); c.beginPath();
+    for (const [a, b] of ivs) {
+      const ix0 = Math.max(xOf(a), -20), ix1 = Math.min(xOf(b), W + 20);
+      if (ix1 <= ix0) continue;
+      c.save(); rr(c, ix0, y + 3, Math.max(2, ix1 - ix0), TL.rowH - 6, 6);
+      if (sub) { c.fillStyle = sel ? COL.sub : COL.raise; c.fill(); c.strokeStyle = COL.sub; c.lineWidth = 1.2; c.setLineDash(sel ? [] : [4, 3]); c.stroke(); c.setLineDash([]); }
+      else { c.fillStyle = sel ? COL.accent : COL.soft; c.fill(); }
+      c.restore();
+    }
+    c.restore();
     // 名前（左端に張り付く）
-    c.save(); rr(c, vx0, y + 3, vx1 - vx0, TL.rowH - 6, 6); c.clip();
+    const fi = ivs.find(([a, b]) => xOf(b) > 0) || ivs[0] || [m.start, m.end];
+    const lx0 = Math.max(xOf(fi[0]), -20), lx1 = Math.min(xOf(fi[1]), W + 20);
+    c.save(); rr(c, lx0, y + 3, Math.max(2, lx1 - lx0), TL.rowH - 6, 6); c.clip();
     c.fillStyle = sel ? (sub ? '#0d2036' : COL.accentInk) : COL.ink;
     c.font = (sel ? '700 ' : '500 ') + '11px "Zen Kaku Gothic New", system-ui, sans-serif'; c.textBaseline = 'middle';
-    c.fillText((sub ? '− ' : '') + m.name, Math.max(vx0 + 10, 6) + (sel ? 6 : 0), y + TL.rowH / 2);
+    c.fillText((sub ? '− ' : '') + m.name, Math.max(lx0 + 10, 6) + (sel ? 6 : 0), y + TL.rowH / 2);
+    c.restore(); c.save();
     // キーフレーム
     if (m.animated) for (const k of m.keys) {
+      if (k.off) continue;
       const kx = xOf(k.t); if (kx < -8 || kx > W + 8) continue;
       const s = sel ? 5 : 4, cy = y + TL.rowH / 2;
       c.beginPath(); c.moveTo(kx, cy - s); c.lineTo(kx + s, cy); c.lineTo(kx, cy + s); c.lineTo(kx - s, cy); c.closePath();
@@ -2305,6 +2352,21 @@ const zoomBy = k => { if (!S.media) return; TL.pps = clamp(TL.pps * k, minPps(),
 $('#zIn').onclick = () => zoomBy(1.8);
 $('#zOut').onclick = () => zoomBy(1 / 1.8);
 
+// 表示される区間（off キーで隠れている所を除く）
+function visIntervals(m) {
+  if (!m.animated) return [[m.start, m.end]];
+  const iv = []; let cur = m.start;
+  const ks = m.keys;
+  for (let i = 0; i < ks.length; i++) {
+    if (!ks[i].off) continue;
+    const hs = ks[i].t, he = i + 1 < ks.length ? ks[i + 1].t : m.end;
+    if (hs > cur) iv.push([cur, Math.min(hs, m.end)]);
+    cur = Math.max(cur, he);
+  }
+  if (cur < m.end) iv.push([cur, m.end]);
+  return iv.filter(([a, b]) => b > a);
+}
+
 // ---------- 人物の自動検出（MediaPipe Object Detector） ----------
 const MP_BASE = new URL('./mediapipe/', location.href).href;
 const GCS = 'https://storage.googleapis.com/mediapipe-models/object_detector/';
@@ -2313,7 +2375,7 @@ const MODEL_SRC = {
   high: { size: 960, urls: ['models/efficientdet_lite2.tflite', GCS + 'efficientdet_lite2/float16/1/efficientdet_lite2.tflite', GCS + 'efficientdet_lite2/float16/latest/efficientdet_lite2.tflite', GCS + 'efficientdet_lite2/int8/1/efficientdet_lite2.tflite'] },
 };
 const FACE_URLS = ['models/blaze_face_short_range.tflite', 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite', 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite'];
-const AD = { vision: null, fileset: null, det: null, detKey: '', delegate: '', face: null, faceTried: false, tracks: [], opts: { size: 'm', quality: 'std', rate: 10, thr: 40, replace: true }, abort: null };
+const AD = { vision: null, fileset: null, det: null, detKey: '', delegate: '', face: null, faceTried: false, tracks: [], opts: { size: 'm', quality: 'std', rate: 10, thr: 40, replace: true, link: true }, abort: null };
 const SIZE_K = { s: 1.25, m: 1.6, l: 2.1 };
 
 async function getModelBytes(q, status) { return fetchModel(MODEL_SRC[q].urls, status); }
@@ -2396,7 +2458,33 @@ const iou = (a, b) => {
   return i / (a.w * a.h + b.w * b.h - i || 1);
 };
 
-// 簡易トラッカー：等速予測＋IoU/中心距離で対応づけ
+// 服の色の特徴（色相×彩度のヒストグラム）。同じ人かどうかの手がかりにする
+function colorHist(d, cw, ch, b) {
+  const H = new Float32Array(28);
+  const x0 = Math.max(0, Math.floor((b.x + b.w * 0.2) * cw)), x1 = Math.min(cw, Math.ceil((b.x + b.w * 0.8) * cw));
+  const y0 = Math.max(0, Math.floor((b.y + b.h * 0.22) * ch)), y1 = Math.min(ch, Math.ceil((b.y + b.h * 0.7) * ch));
+  if (x1 - x0 < 3 || y1 - y0 < 3) return null;
+  const step = Math.max(1, Math.floor(Math.sqrt((x1 - x0) * (y1 - y0) / 500)));
+  let n = 0;
+  for (let y = y0; y < y1; y += step) for (let x = x0; x < x1; x += step) {
+    const i = (y * cw + x) * 4, r = d[i] / 255, g = d[i + 1] / 255, bl = d[i + 2] / 255;
+    const mx = Math.max(r, g, bl), mn = Math.min(r, g, bl), sat = mx ? (mx - mn) / mx : 0;
+    let bin;
+    if (mx < 0.16) bin = 27;
+    else if (sat < 0.2) bin = 24 + Math.min(2, Math.floor(mx * 3));
+    else {
+      const dd = mx - mn; let h;
+      if (mx === r) h = ((g - bl) / dd + 6) % 6; else if (mx === g) h = (bl - r) / dd + 2; else h = (r - g) / dd + 4;
+      bin = Math.min(11, Math.floor(h * 2)) * 2 + (sat > 0.5 ? 1 : 0);
+    }
+    H[bin]++; n++;
+  }
+  for (let k = 0; k < 28; k++) H[k] /= n;
+  return H;
+}
+const bhat = (a, b) => { if (!a || !b) return 0.75; let s = 0; for (let k = 0; k < a.length; k++) s += Math.sqrt(a[k] * b[k]); return s; };
+
+// トラッカー：等速予測＋位置（IoU・中心距離）＋顔の位置＋服の色で対応づけ。シーンが切り替わったら全員打ち切る
 class PersonTracker {
   constructor(aspect) { this.active = []; this.done = []; this.nid = 1; this.aspect = aspect; }
   predict(tr, t) {
@@ -2406,16 +2494,26 @@ class PersonTracker {
     const k = Math.min(t - a.t, 0.6);
     return { ...a, x: a.x + (a.x - b.x) / dt * k, y: a.y + (a.y - b.y) / dt * k };
   }
+  cut() { this.done.push(...this.active); this.active = []; }
   update(t, boxes, can) {
     const cand = [];
     for (const tr of this.active) {
-      const p = this.predict(tr, t);
+      const p = this.predict(tr, t), last = tr.pts[tr.pts.length - 1];
       boxes.forEach((b, j) => {
         const o = iou(p, b);
         const dx = (p.x + p.w / 2 - b.x - b.w / 2) * this.aspect, dy = (p.y + p.h / 2 - b.y - b.h / 2);
         const d = Math.hypot(dx, dy) / Math.max(p.h, b.h, 0.03);
         const sz = Math.min(p.h, b.h) / Math.max(p.h, b.h);
-        if ((o > 0.12 || d < 0.45) && sz > 0.45) cand.push({ tr, j, s: o + Math.max(0, 0.45 - d) });
+        if (!((o > 0.12 || d < 0.45) && sz > 0.45)) return;
+        const sim = bhat(tr.app, b.app);
+        if (tr.pts.length >= 3 && sim < 0.62) return;          // 服の色が明らかに違う → 別人
+        let sc = o + Math.max(0, 0.45 - d) + (sim - 0.75) * 1.2;
+        if (last.face && b.face) {
+          const fd = Math.hypot((last.face.cx - b.face.cx) * this.aspect, last.face.cy - b.face.cy) / Math.max(last.face.h, b.face.h, 0.01);
+          if (fd > 3 && t - last.t < 0.4) return;              // 顔が離れすぎ → 別人
+          sc += Math.max(0, 1.5 - fd) * 0.3;
+        }
+        cand.push({ tr, j, s: sc });
       });
     }
     cand.sort((a, b) => b.s - a.s);
@@ -2431,28 +2529,35 @@ class PersonTracker {
     });
   }
   add(tr, t, b, can) {
-    tr.pts.push({ t, ...b });
+    tr.pts.push({ t, ...b, app: undefined });
+    if (b.app) {
+      if (!tr.app) { tr.app = Float32Array.from(b.app); tr.appSum = Float32Array.from(b.app); }
+      else for (let k = 0; k < 28; k++) { tr.app[k] = tr.app[k] * 0.8 + b.app[k] * 0.2; tr.appSum[k] += b.app[k]; }
+    }
     const a = b.w * b.h * b.s;
     if (!tr.best || a > tr.best.a) tr.best = { a, t, thumb: cropThumb(can, b) };
   }
   count() { return this.active.length + this.done.length; }
-  finish(duration) {
+  finish(cuts) {
+    const crosses = (t0, t1) => cuts.some(c => c > t0 + 1e-4 && c <= t1 + 1e-4);
     let all = this.done.concat(this.active).filter(tr => tr.pts.length >= 3);
     all.sort((a, b) => a.pts[0].t - b.pts[0].t);
-    // 途切れた軌跡をつなぐ
+    // 同じシーン内で途切れた軌跡をつなぐ
     for (let changed = true; changed;) {
       changed = false;
       outer: for (const a of all) for (const b of all) {
         if (a === b) continue;
         const ae = a.pts[a.pts.length - 1], bs = b.pts[0];
         const gap = bs.t - ae.t;
-        if (gap <= 0 || gap > 2.0) continue;
+        if (gap <= 0 || gap > 2.0 || crosses(ae.t, bs.t)) continue;
+        if (bhat(a.app, b.app) < 0.7) continue;
         const p = this.predict(a, bs.t);
         const d = Math.hypot((p.x + p.w / 2 - bs.x - bs.w / 2) * this.aspect, p.y + p.h / 2 - bs.y - bs.h / 2) / Math.max(p.h, bs.h);
         const sz = Math.min(p.h, bs.h) / Math.max(p.h, bs.h);
         if ((iou(p, bs) > 0.1 || d < 0.6) && sz > 0.5) {
           a.pts = a.pts.concat(b.pts);
           if (b.best.a > a.best.a) a.best = b.best;
+          if (b.appSum) { if (!a.appSum) { a.appSum = b.appSum; a.app = b.app; } else for (let k = 0; k < 28; k++) a.appSum[k] += b.appSum[k]; }
           all = all.filter(x => x !== b); changed = true; break outer;
         }
       }
@@ -2461,9 +2566,38 @@ class PersonTracker {
     for (const tr of all) {
       tr.start = tr.pts[0].t; tr.end = tr.pts[tr.pts.length - 1].t;
       tr.weight = tr.pts.reduce((s, p) => s + p.w * p.h * p.s, 0);
+      if (tr.appSum) { const sum = tr.appSum.reduce((x, y) => x + y, 0) || 1; tr.desc = tr.appSum.map(v => v / sum); } else tr.desc = null;
+      tr.thumbURL = tr.best.thumb.toDataURL('image/jpeg', 0.8);
+      tr.best.thumb = null;
     }
     return all;
   }
+}
+// 別々の場面に映った同じ人をまとめる（同時に映っている人どうしは必ず別人）
+function groupTracks(tracks, link) {
+  const groups = [];
+  const sorted = tracks.slice().sort((a, b) => b.weight - a.weight);
+  for (const tr of sorted) {
+    let best = null, bs = 0;
+    if (link && tr.desc) for (const g of groups) {
+      if (!g.desc || g.members.some(m => m.start < tr.end + 0.1 && tr.start < m.end + 0.1)) continue;
+      const sim = bhat(g.desc, tr.desc);
+      if (sim > bs) { bs = sim; best = g; }
+    }
+    if (best && bs >= 0.9) {
+      best.members.push(tr);
+      const w0 = best.w, w1 = tr.weight;
+      best.desc = best.desc.map((v, k) => (v * w0 + tr.desc[k] * w1) / (w0 + w1)); best.w = w0 + w1;
+    } else groups.push({ members: [tr], desc: tr.desc ? Float32Array.from(tr.desc) : null, w: tr.weight });
+  }
+  for (const g of groups) {
+    g.members.sort((a, b) => a.start - b.start);
+    g.start = g.members[0].start; g.end = Math.max(...g.members.map(m => m.end));
+    g.weight = g.members.reduce((x, m) => x + m.weight, 0);
+    g.best = g.members.reduce((a, b) => (b.best.a > a.best.a ? b : a));
+  }
+  groups.sort((a, b) => a.start - b.start);
+  return groups;
 }
 function cropThumb(can, b) {
   const th = 96, mx = b.w * 0.1, my = b.h * 0.06;
@@ -2482,7 +2616,7 @@ async function analyzePeople({ quality, rate, thr, signal, onProgress }) {
   const big = MODEL_SRC[quality].size, sc = Math.min(1, big / Math.max(S.W, S.H));
   const cw = Math.max(2, Math.round(S.W * sc)), ch = Math.max(2, Math.round(S.H * sc));
   const can = document.createElement('canvas'); can.width = cw; can.height = ch;
-  const ctx = can.getContext('2d');
+  const ctx = can.getContext('2d', { willReadFrequently: true });
   // 顔探し用の中解像度キャンバスと切り出し用キャンバス
   const ms = Math.min(1, 1440 / Math.max(S.W, S.H));
   const mw = Math.round(S.W * ms), mh = Math.round(S.H * ms);
@@ -2519,14 +2653,38 @@ async function analyzePeople({ quality, rate, thr, signal, onProgress }) {
   const tracker = new PersonTracker(S.W / S.H);
   const interval = 1 / rate;
   let nextT = 0, err = null, out = 0;
+  // カット（シーンの切り替わり）検出：全フレームを 32×18 に縮めて前のフレームと比べる
+  const tiny = document.createElement('canvas'); tiny.width = 32; tiny.height = 18;
+  const tc = tiny.getContext('2d', { willReadFrequently: true });
+  let prevH = null, prevP = null, cutPending = false;
+  const cuts = [];
+  const isCut = f => {
+    tc.drawImage(f, 0, 0, 32, 18);
+    const d = tc.getImageData(0, 0, 32, 18).data;
+    const hist = new Float32Array(64), pix = new Float32Array(576);
+    for (let i = 0, j = 0; i < d.length; i += 4, j++) { hist[(d[i] >> 6) * 16 + (d[i + 1] >> 6) * 4 + (d[i + 2] >> 6)]++; pix[j] = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11; }
+    let cut = false;
+    if (prevH) {
+      let hd = 0, md = 0;
+      for (let k = 0; k < 64; k++) hd += Math.abs(hist[k] - prevH[k]);
+      for (let j = 0; j < 576; j++) md += Math.abs(pix[j] - prevP[j]);
+      hd /= 576; md /= 576;
+      cut = (hd > 0.5 && md > 18) || (md > 42 && hd > 0.22);
+    }
+    prevH = hist; prevP = pix;
+    return cut;
+  };
   const dec = new VideoDecoder({
     output: f => {
       try {
         out++;
         if (err || signal.aborted) return;
         const t = f.timestamp / 1e6;
-        if (t < -1e-3 || t + 1e-4 < nextT) return;
+        if (t < -1e-3) return;
+        if (isCut(f) && out > 1) { cuts.push(t); cutPending = true; nextT = t; }
+        if (t + 1e-4 < nextT) return;
         nextT = t + interval * 0.999;
+        if (cutPending) { tracker.cut(); cutPending = false; }
         if (face) { drawRot(mctx, f, v.rotation, mw, mh); ctx.drawImage(mid, 0, 0, cw, ch); }
         else drawRot(ctx, f, v.rotation, cw, ch);
         f.close(); f = null;
@@ -2551,6 +2709,7 @@ async function analyzePeople({ quality, rate, thr, signal, onProgress }) {
           if (!dup) kept.push(b);
         }
         if (face) for (const b of kept) { try { b.face = findFace(b); } catch (e) { b.face = null; } }
+        if (kept.length) { const img = ctx.getImageData(0, 0, cw, ch).data; for (const b of kept) b.app = colorHist(img, cw, ch, b); }
         tracker.update(t, kept, can);
       } catch (e) { err = e; }
       finally { if (f) f.close(); }
@@ -2573,7 +2732,8 @@ async function analyzePeople({ quality, rate, thr, signal, onProgress }) {
     await dec.flush();
     if (err) throw err;
   } finally { try { dec.close(); } catch (e) { } }
-  return tracker.finish(S.duration);
+  const tracks = tracker.finish(cuts);
+  return { tracks, cuts };
 }
 
 // 検出結果 → 頭（顔）の位置と大きさ（px）。画面端で切れた体の枠は、見えていた時の大きさから外側へ補う
@@ -2653,51 +2813,74 @@ function simplifyKeys(pts, tol) {
   }
   return pts.filter((_, i) => keep[i]);
 }
-function tracksToMasks(tracks, size) {
-  const K = SIZE_K[size] || 1.6;
-  let n = S.masks.filter(m => m.auto).length;
-  const made = [];
-  for (const tr of tracks) {
-    const hp = smoothHead(headPath(tr));
-    // 顔が画面内にある区間ごとに分ける（画面外の間はマスク不要）
-    const segs = []; let cur = null;
-    hp.forEach((p, i) => {
-      if (p.vis) {
-        if (!cur || p.t - cur[cur.length - 1].t > 0.6) { cur = []; segs.push(cur); if (i > 0 && !hp[i - 1].vis) cur.push(hp[i - 1]); }
-        cur.push(p);
-      } else if (cur && cur.length && cur[cur.length - 1].vis) { cur.push(p); cur = null; }
-    });
-    n++;
-    // 検出が途切れた端は、直前の動きのまま少し先まで延ばす（画面外へ抜ける動きを途中で止めない）
-    const extend = (seg, atEnd) => {
+// 1つの軌跡 → 顔が画面内にある区間ごとの点列（カットはまたがない）
+function trackSegments(tr, cuts) {
+  const hp = smoothHead(headPath(tr));
+  const segs = []; let cur = null;
+  hp.forEach((p, i) => {
+    if (p.vis) {
+      if (!cur || p.t - cur[cur.length - 1].t > 0.6) { cur = []; segs.push(cur); if (i > 0 && !hp[i - 1].vis) cur.push(hp[i - 1]); }
+      cur.push(p);
+    } else if (cur && cur.length && cur[cur.length - 1].vis) { cur.push(p); cur = null; }
+  });
+  const prevCut = t => { let c = 0; for (const x of cuts) if (x <= t + 1e-4) c = x; return c; };
+  const nextCut = t => { for (const x of cuts) if (x > t + 1e-4) return x; return Infinity; };
+  return segs.filter(seg => seg.some(p => p.vis)).map(seg => {
+    const lo = prevCut(seg[0].t), hi = Math.min(S.duration, nextCut(seg[seg.length - 1].t) - 0.002);
+    // 検出が途切れた端は、直前の動きのまま少し延ばす（ただしカットの手前まで）
+    const extend = atEnd => {
       const e = atEnd ? seg[seg.length - 1] : seg[0];
+      if (!e.vis) return;
       const near = seg.filter(p => Math.abs(p.t - e.t) <= 0.5 && p !== e);
       if (!near.length) return;
       const o = near.reduce((a, b) => (Math.abs(b.t - e.t) > Math.abs(a.t - e.t) ? b : a));
       const dt = e.t - o.t; if (!dt) return;
-      const vx = (e.hx - o.hx) / dt, vy = (e.hy - o.hy) / dt;
-      const d = atEnd ? 0.4 : -0.2;
-      const t = clamp(e.t + d, 0, S.duration);
-      const p = { ...e, t, hx: e.hx + vx * (t - e.t), hy: e.hy + vy * (t - e.t) };
+      const t = clamp(e.t + (atEnd ? 0.4 : -0.2), lo, hi);
+      if (Math.abs(t - e.t) < 0.01) return;
+      const p = { ...e, t, hx: e.hx + (e.hx - o.hx) / dt * (t - e.t), hy: e.hy + (e.hy - o.hy) / dt * (t - e.t) };
       p.vis = p.hx + p.hw / 2 > 0 && p.hx - p.hw / 2 < S.W && p.hy + p.hh / 2 > 0 && p.hy - p.hh / 2 < S.H;
       if (atEnd) seg.push(p); else seg.unshift(p);
     };
-    segs.forEach(seg => { if (seg[seg.length - 1].vis) extend(seg, true); if (seg[0].vis) extend(seg, false); });
+    extend(true); extend(false);
+    for (const p of seg) p.t = clamp(p.t, lo, hi);
+    return seg;
+  });
+}
+function groupsToMasks(groups, size, cuts) {
+  const K = SIZE_K[size] || 1.6;
+  let n = S.masks.filter(m => m.auto).length;
+  const made = [];
+  for (const g of groups) {
+    const members = g.members.filter(m => m.blur);
+    if (!members.length) continue;
+    const segs = members.flatMap(tr => trackSegments(tr, cuts)).sort((a, b) => a[0].t - b[0].t);
+    if (!segs.length) continue;
+    // 同じシーンで一瞬見失っただけ（2.5秒以内・画面外に出ていない）ならつないで補間、
+    // それ以外（カットをまたぐ・画面外に出た・長く消えた）は次の登場まで非表示にして瞬間移動
+    const linked = (a, b) => {
+      const ea = a[a.length - 1], sb = b[0];
+      return ea.vis && sb.vis && sb.t - ea.t <= 2.5 && !cuts.some(c => c > ea.t + 1e-4 && c <= sb.t + 1e-4);
+    };
+    const keys = [];
+    let lastT = -1;
     segs.forEach((seg, si) => {
-      const vis = seg.filter(p => p.vis);
-      if (!vis.length) return;
-      const keys = simplifyKeys(seg.map(p => ({ t: p.t, cx: p.hx / S.W, cy: p.hy / S.H, hw: p.hw / 2 * K / S.W, hh: p.hh / 2 * K / S.H })), 0.005)
+      const ks = simplifyKeys(seg.map(p => ({ t: p.t, cx: p.hx / S.W, cy: p.hy / S.H, hw: p.hw / 2 * K / S.W, hh: p.hh / 2 * K / S.H })), 0.005)
         .map(k => ({ t: k.t, cx: k.cx, cy: k.cy, hw: k.hw, hh: k.hh, rot: 0 }));
-      const leftEarly = !seg[0].vis, leftLate = !seg[seg.length - 1].vis;
-      const m = {
-        id: S.nextId++, name: '人物' + n + (segs.length > 1 ? '-' + (si + 1) : ''), op: 'add', auto: true, type: 'ellipse', blur: 80, feather: 35, invert: false, visible: true,
-        animated: keys.length > 1,
-        start: Math.max(0, seg[0].t - (leftEarly ? 0 : 0.05)),
-        end: Math.min(S.duration, seg[seg.length - 1].t + (leftLate ? 0 : 0.05)),
-        keys,
-      };
-      S.masks.push(m); made.push(m);
+      for (const k of ks) { if (k.t <= lastT) k.t = lastT + 0.001; lastT = k.t; }
+      if (si > 0 && !linked(segs[si - 1], seg)) ks[0].jump = true;
+      keys.push(...ks);
+      if (si < segs.length - 1 && !linked(seg, segs[si + 1])) {
+        const l = ks[ks.length - 1];
+        lastT = l.t + 0.001;
+        keys.push({ t: lastT, cx: l.cx, cy: l.cy, hw: l.hw, hh: l.hh, rot: 0, off: true });
+      }
     });
+    n++;
+    const m = {
+      id: S.nextId++, name: '人物' + n, op: 'add', auto: true, type: 'ellipse', blur: 25, feather: 35, invert: false, visible: true,
+      animated: keys.length > 1, start: Math.max(0, keys[0].t), end: Math.min(S.duration, keys[keys.length - 1].t + 0.001), keys,
+    };
+    S.masks.push(m); made.push(m);
   }
   return made;
 }
@@ -2722,7 +2905,7 @@ function openAuto() {
   const autos = S.masks.filter(m => m.auto).length;
   $('#adClear').style.display = autos ? '' : 'none';
   $('#adClear').textContent = `自動マスク（${autos}個）をすべて削除`;
-  showAdStage(AD.tracks.length && AD.forFile === S.file ? 'result' : 'form');
+  showAdStage(AD.groups && AD.forFile === S.file ? 'result' : 'form');
   openSheet($('#autoSheet'));
 }
 function showAdStage(st) {
@@ -2756,19 +2939,16 @@ $('#adStart').onclick = async () => {
       },
     });
   try {
-    let tracks;
-    try { tracks = await run(); }
+    let res;
+    try { res = await run(); }
     catch (e) {
       if (AD.abort.signal.aborted || AD.delegate !== 'GPU') throw e;
       AD.forceCPU = true; AD.detKey = '';
       $('#adStat').textContent = 'GPU で動かなかったため、CPU でやり直しています…';
-      tracks = await run();
+      res = await run();
     }
-    // 被写体の推定：いちばん大きく長く映っている人
-    tracks.forEach(tr => { tr.blur = true; tr.subject = false; });
-    const top = tracks.reduce((a, b) => (!a || b.weight > a.weight ? b : a), null);
-    if (top) { top.blur = false; top.subject = true; }
-    AD.tracks = tracks; AD.forFile = S.file;
+    AD.tracks = res.tracks; AD.cuts = res.cuts; AD.forFile = S.file;
+    regroup();
     S.exporting = false;
     showAdStage('result');
   } catch (e) {
@@ -2782,28 +2962,49 @@ $('#adStart').onclick = async () => {
 };
 $('#adCancel').onclick = () => { AD.abort?.abort(); };
 $('#adBack').onclick = () => { if (!S.exporting) showAdStage('form'); };
+// 人ごとにまとめ直し、いちばん大きく長く映っている人を被写体と推定する
+function regroup() {
+  AD.groups = groupTracks(AD.tracks, AD.opts.link);
+  AD.tracks.forEach(tr => { tr.blur = true; });
+  const top = AD.groups.reduce((a, b) => (!a || b.weight > a.weight ? b : a), null);
+  AD.groups.forEach(g => { g.subject = g === top; if (g.subject) g.members.forEach(m => { m.blur = false; }); });
+}
+const tfmt = t => fmt(t).replace(/\.\d+$/, '');
 function renderAdResult() {
   const box = $('#adList'); box.innerHTML = '';
-  const tr = AD.tracks;
-  $('#adSummary').textContent = tr.length ? `${tr.length} 人が見つかりました。ぼかさない人（被写体）をタップして外してください。` : '人物は見つかりませんでした。感度を下げるか、高精度で試してください。';
-  for (const t of tr) {
+  const gs = AD.groups || [];
+  $('#adSummary').textContent = gs.length ? `${gs.length} 人が見つかりました（カット ${AD.cuts.length} か所）。ぼかさない人（被写体）をタップして外してください。下の小さい画像で、場面ごとにも切り替えられます。` : '人物は見つかりませんでした。しきい値を下げるか、高精度で試してください。';
+  $('#adLink').checked = AD.opts.link;
+  for (const g of gs) {
+    const on = g.members.filter(m => m.blur).length;
     const card = document.createElement('div');
-    card.className = 'pcard' + (t.blur ? ' on' : '');
+    card.className = 'pcard' + (on === g.members.length ? ' on' : on ? ' mixed' : '');
     card.setAttribute('role', 'button'); card.tabIndex = 0;
-    const img = t.best.thumb; img.className = 'pimg';
+    const img = document.createElement('img'); img.className = 'pimg'; img.src = g.best.thumbURL; img.alt = '';
     card.appendChild(img);
     const meta = document.createElement('div'); meta.className = 'pmeta';
     meta.innerHTML = `<b></b><small></small>`;
-    meta.querySelector('b').textContent = t.blur ? 'ぼかす' : (t.subject ? '被写体' : 'ぼかさない');
-    meta.querySelector('small').textContent = `${fmt(t.start).replace(/\.\d+$/, '')}〜${fmt(t.end).replace(/\.\d+$/, '')}`;
+    meta.querySelector('b').textContent = on === g.members.length ? 'ぼかす' : on ? '一部ぼかす' : (g.subject ? '被写体' : 'ぼかさない');
+    meta.querySelector('small').textContent = `${tfmt(g.start)}〜${tfmt(g.end)}` + (g.members.length > 1 ? `　${g.members.length}場面` : '');
     card.appendChild(meta);
     const go = document.createElement('button'); go.className = 'pgo'; go.textContent = '見る'; go.setAttribute('aria-label', 'この人が映っている場面へ移動');
-    go.onclick = ev => { ev.stopPropagation(); seek(snapT(t.best.t)); toast(`${fmt(t.best.t)} に移動しました`); };
+    go.onclick = ev => { ev.stopPropagation(); seek(snapT(g.best.best.t)); toast(`${fmt(g.best.best.t)} に移動しました`); };
     card.appendChild(go);
-    card.onclick = () => { t.blur = !t.blur; renderAdResult(); };
+    card.onclick = () => { const v = on !== g.members.length; g.members.forEach(m => { m.blur = v; }); renderAdResult(); };
+    if (g.members.length > 1) {
+      const row = document.createElement('div'); row.className = 'pscenes';
+      for (const m of g.members) {
+        const b = document.createElement('button'); b.className = 'pscene' + (m.blur ? ' on' : '');
+        b.setAttribute('aria-label', `${tfmt(m.start)} の場面を切り替え`);
+        b.innerHTML = `<img alt=""><span>${tfmt(m.start)}</span>`; b.querySelector('img').src = m.thumbURL;
+        b.onclick = ev => { ev.stopPropagation(); m.blur = !m.blur; renderAdResult(); };
+        row.appendChild(b);
+      }
+      card.appendChild(row);
+    }
     box.appendChild(card);
   }
-  const n = tr.filter(t => t.blur).length;
+  const n = gs.filter(g => g.members.some(m => m.blur)).length;
   const autos = S.masks.filter(m => m.auto).length;
   $('#adReplaceRow').style.display = autos ? '' : 'none';
   $('#adReplace').checked = AD.opts.replace;
@@ -2811,14 +3012,15 @@ function renderAdResult() {
   $('#adMake').textContent = n ? `${n} 人にぼかしを作成` : 'ぼかす人が選ばれていません';
 }
 $('#adReplace').onchange = e => { AD.opts.replace = e.target.checked; };
+$('#adLink').onchange = e => { AD.opts.link = e.target.checked; regroup(); renderAdResult(); };
 $('#adMake').onclick = () => {
-  const list = AD.tracks.filter(t => t.blur);
+  const list = (AD.groups || []).filter(g => g.members.some(m => m.blur));
   if (!list.length) return;
   if (AD.opts.replace && S.masks.some(m => m.auto)) {
     const ids = new Set(S.masks.filter(m => m.auto).map(m => m.id));
     S.masks = S.masks.filter(m => !ids.has(m.id) && !(isSub(m) && ids.has(m.target)));
   }
-  const made = tracksToMasks(list, AD.opts.size);
+  const made = groupsToMasks(list, AD.opts.size, AD.cuts || []);
   S.sel = made[0]?.id ?? S.sel;
   commit(); closeSheets(); refreshAll();
   toast(`${list.length} 人分のマスクを作成しました。再生して確認し、ずれた所はキーフレームで直してください`, 5000);
@@ -2827,6 +3029,8 @@ $('#adMake').onclick = () => {
 // ---------- 初期化 ----------
 if (matchMedia) { const upd = () => { ACCENT = cssVar('--accent') || ACCENT; SUBC = cssVar('--sub') || SUBC; readCols(); scheduleDraw(); }; upd(); matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', upd); }
 renderMaskList(); renderProps(); layout(); syncKeyBtn();
+
+try { const um = localStorage.getItem('blurmask:uiMode'); if (um && UI_LABEL[um]) setUiMode(um); } catch (e) { }
 
 </script>
 <script>
